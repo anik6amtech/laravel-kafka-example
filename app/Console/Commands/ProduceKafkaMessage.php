@@ -2,39 +2,30 @@
 
 namespace App\Console\Commands;
 
-use Junges\Kafka\Facades\Kafka;
+use App\Services\KafkaService;
 use Illuminate\Console\Command;
 
 class ProduceKafkaMessage extends Command
 {
-    protected $signature = 'kafka:produce {message} {--event_type=default_event}';
+    protected $signature = 'kafka:produce {message} {--event_type=default_event} {--topic=}';
     protected $description = 'Produce a message to Kafka';
+
+    public function __construct(protected KafkaService $kafkaService)
+    {
+        parent::__construct();
+    }
 
     public function handle()
     {
         $message = $this->argument('message');
         $eventType = $this->option('event_type');
+        $topic = $this->option('topic') ?? env('KAFKA_DEFAULT_TOPIC');
 
         try {
-
-
-
-            Kafka::publish(env('KAFKA_BROKERS'))->onTopic('test2')
-                ->withConfigOptions([
-                    'socket.timeout.ms' => 50,
-                ])
-                ->withBodyKey('data', $message)
-                ->withBodyKey('event_type', $eventType)
-                ->withHeaders([
-                    'data-header' => 'data-value'
-                ])
-                ->send();
-
-            $this->info("Message sent to Kafka topic 'test2'");
-            $this->info("Message: $message");
-            $this->info("Event Type: $eventType");
+            $this->kafkaService->produceMessage($message, [], $eventType);
+            $this->info("Message sent to Kafka topic '{$topic}'");
         } catch (\Exception $e) {
-            $this->error('Error sending message to Kafka: ' . $e->getMessage());
+            $this->error('Error sending Kafka message: ' . $e->getMessage());
         }
     }
 }

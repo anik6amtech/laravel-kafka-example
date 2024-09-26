@@ -2,31 +2,37 @@
 
 namespace App\Console\Commands;
 
-use App\Service\KafkaHandler;
-use Junges\Kafka\Facades\Kafka;
+use App\Services\KafkaService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
 class ConsumeKafkaMessage extends Command
 {
-    protected $signature = 'kafka:consume';
+    protected $signature = 'kafka:consume {--handler=DefaultKafkaHandler} {--topic=test_topic}';
     protected $description = 'Consume messages from a Kafka topic';
 
-    public function handle()
+    public function handle(KafkaService $kafkaService)
     {
         try {
-            $consumer = Kafka::consumer(['test2'])
-                ->withBrokers(env('KAFKA_BROKERS'))
-                ->withHandler(new KafkaHandler())
+            // Get the handler name from the options, default to DefaultKafkaHandler
+            $handlerName = $this->option('handler');
+            $topic = $this->option('topic');
 
-                ->withAutoCommit()
-                ->build();
+            // Dynamically resolve the handler class
+            $handlerClass = "App\\Handlers\\{$handlerName}";
 
-            $this->info("Starting to consume messages from 'test2'...");
-            Log::info("Kafka consumer started", ['topic' => 'test2']);
+            if (!class_exists($handlerClass)) {
+                $this->error("Handler class '{$handlerClass}' not found.");
+                return;
+            }
 
-            // Start consuming messages
-            $consumer->consume();
+            // Instantiate the handler
+            $handler = new $handlerClass();
+
+            // Call the Kafka service to consume messages
+            $kafkaService->consumeMessages($handler, $topic);
+
+            $this->info("Started consuming messages from topic '{$topic}' with handler '{$handlerClass}'");
         } catch (\Exception $e) {
             $this->error("Error occurred while consuming messages: " . $e->getMessage());
             Log::error("Kafka consumer error", [
